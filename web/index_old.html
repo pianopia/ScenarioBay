@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas Drawing App</title>
+    <!-- Fabric.jsを読み込む -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/4.5.0/fabric.min.js"></script>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <script>
+        // Fabric.jsを使用してキャンバスを取得
+        var canvas = new fabric.Canvas('canvas');
+
+        // Canvasを最大サイズにする関数
+        function resizeCanvas() {
+            var canvasElement = document.getElementById('canvas');
+            canvasElement.width = window.innerWidth;
+            canvasElement.height = window.innerHeight;
+            canvas.setDimensions({ width: window.innerWidth, height: window.innerHeight });
+        }
+
+        // 初期化時とウィンドウサイズ変更時にCanvasのサイズを更新
+        window.addEventListener('load', resizeCanvas, false);
+        window.addEventListener('resize', resizeCanvas, false);
+
+        var isDragging = false;
+
+        // ダブルクリックしたときの処理
+        canvas.on('mouse:dblclick', function(event) {
+            if (isDragging) {
+                return; // ドラッグ中は処理しない
+            }
+
+            var target = event.target;
+            if (target && target.type === 'textbox') {
+                // テキストボックスがダブルクリックされた場合は編集モードにする
+                target.enterEditing();
+                target.selectAll();
+                canvas.setActiveObject(target); // テキストボックスをアクティブにする
+                return;
+            }
+
+            // ダブルクリックした位置にテキストボックスを配置
+            var textbox = new fabric.Textbox('text...', {
+                left: event.pointer.x,
+                top: event.pointer.y,
+                width: 150,
+                fontSize: 16,
+                editable: true
+            });
+            canvas.add(textbox);
+            canvas.setActiveObject(textbox);
+            textbox.enterEditing();
+        });
+
+        // マウスが動いたときの処理
+        canvas.on('mouse:move', function(event) {
+            isDragging = true;
+        });
+
+        // マウスが静止したときの処理
+        canvas.on('mouse:up', function(event) {
+            isDragging = false;
+        });
+
+        // フォーカスが外れたときの処理
+        canvas.on('text:changed', function(event) {
+            var target = event.target;
+            if (target && target.type === 'textbox' && !canvas.getActiveObject()) {
+                // テキストボックスからフォーカスが外れた場合は編集を終了
+                target.exitEditing();
+            }
+        });
+
+
+        // キャンバス上をクリックしたときの処理
+        canvas.on('mouse:down', function(event) {
+            if(isDragging) {
+                return;
+            }
+            var target = event.target;
+            if (target && target.type === 'textbox') {
+                // テキストボックス以外の場所をクリックした場合は編集を終了
+                canvas.discardActiveObject();
+                target.selectAll();
+                return;
+            } else {
+                // テキストボックス以外の場所をクリックした場合は選択状態にする
+                canvas.discardActiveObject().renderAll();
+            }
+        });
+
+
+        // キーボードイベントをキャッチしてDeleteキーが押されたらテキストを削除する
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Delete' || event.key === 'Backspace') {
+                var activeObjects = canvas.getActiveObjects();
+                activeObjects.forEach(function(object) {
+                    if (object.type === 'textbox') {
+                        canvas.remove(object);
+                    }
+                });
+            }
+        });
+
+        // テキストボックスにフォーカスが入ったときの処理
+        canvas.on('text:editing:entered', function(event) {
+            var target = event.target;
+            if (target && target.type === 'textbox' && target.text === 'text...') {
+                // テキストボックスに初期テキストが入っている場合は削除する
+                target.selectAll();
+            }
+        });
+
+
+        // キーボードイベントをキャッチしてDeleteキーが押されたらテキストを削除する
+        document.addEventListener('keydown', function(event) {
+            if ((event.ctrlKey || event.metaKey) && (event.key === 'c' || event.key === 'C')) {
+                // コピー (Ctrl+C or Cmd+C)
+                var activeObjects = canvas.getActiveObjects();
+                if (activeObjects.length > 0) {
+                    var clipboard = [];
+                    activeObjects.forEach(function(object) {
+                        if (object.type === 'textbox') {
+                            clipboard.push(object.toObject(['id', 'type', 'left', 'top', 'width', 'height', 'fill', 'stroke', 'strokeWidth', 'text', 'fontSize', 'fontFamily']));
+                        }
+                    });
+                    localStorage.setItem('clipboard', JSON.stringify(clipboard));
+                }
+            } else if ((event.ctrlKey || event.metaKey) && (event.key === 'v' || event.key === 'V')) {
+                // ペースト (Ctrl+V or Cmd+V)
+                var clipboardData = localStorage.getItem('clipboard');
+                if (clipboardData) {
+                    var objects = JSON.parse(clipboardData);
+                    objects.forEach(function(obj) {
+                        if (obj.type === 'textbox') {
+                            fabric.util.enlivenObjects([obj], function(enlivenedObjects) {
+                                enlivenedObjects.forEach(function(enlivenedObject) {
+                                    enlivenedObject.set({
+                                        left: enlivenedObject.left + 10, // ペースト位置をずらす
+                                        top: enlivenedObject.top + 10 // ペースト位置をずらす
+                                    });
+                                    canvas.add(enlivenedObject);
+                                });
+                            });
+                        } else if (obj.type === 'image') {
+                            fabric.Image.fromURL(obj.src, function(image) {
+                                image.set({
+                                    left: image.left + 10, // ペースト位置をずらす
+                                    top: image.top + 10 // ペースト位置をずらす
+                                });
+                                canvas.add(image);
+                            });
+                        } else if (obj.type === 'dataURL') {
+                            fabric.Image.fromURL(obj.src, function(image) {
+                                image.set({
+                                    left: image.left + 10, // ペースト位置をずらす
+                                    top: image.top + 10 // ペースト位置をずらす
+                                });
+                                canvas.add(image);
+                            });
+                        }
+                    });
+                }
+            } else if (event.key === 'Delete' || event.key === 'Backspace') {
+                var activeObjects = canvas.getActiveObjects();
+                activeObjects.forEach(function(object) {
+                    if (object.type === 'textbox') {
+                        canvas.remove(object);
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
+

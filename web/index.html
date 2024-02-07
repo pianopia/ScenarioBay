@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas Drawing App</title>
+    <!-- Fabric.jsを読み込む -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/4.5.0/fabric.min.js"></script>
+    <!-- OGP設定 -->
+    <meta property="og:title" content="ScenarioBay プロット作成ツール">
+    <meta property="og:description" content="自由な配置ができるメモアプリです。">
+    <meta property="og:image" content="https://louddin.cloudfree.jp/demo/ScenarioBay/images/ogp_img.png">
+    <meta property="og:url" content="https://louddin.cloudfree.jp/demo/ScenarioBay/">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <!-- その他のメタ情報 -->
+    <meta name="description" content="シナリオプロット作成に便利な自由配置のメモアプリです。クラウド上には保存せずローカルファイルとして保存が可能です。">
+</head>
+<style>
+  body {
+    margin: 0 auto;
+  }
+
+  .custom-btn {
+    border:0px;
+    padding: 5px 10px;
+    background-color:rgb(0, 150, 170);
+    color: white;
+    border-radius: 20px;
+  }
+</style>
+<body>
+    <div style="position:fixed;width:100%;height:40px;box-shadow:5px 5px 10px gray;background-color:white;padding-top:10px;z-index:10000;">
+        <span style="color:#333333;margin-left:20px;font-weight:bold;z-index:100000;">ScenarioBay -プロット作成ツール-</span>
+        <button class="custom-btn" onclick="saveToFile()" style="margin-left:10px;">保存</button>
+        <input type="file" id="fileInput" accept=".sce" onchange="loadFromFile(event)" style="margin-left:10px;">
+        <button class="custom-btn" onclick="clearCanvas()" style="margin-left:10px;">キャンバスをクリア</button>
+        <span style="color:#AAAAAA;margin-left:20px;font-size:12px;">ダブルクリックでメモ作成　　ALT + ドラッグでキャンバス移動　　スクロールでズームイン・アウト</span>
+    <!--<div id="mousePosition"></div>-->
+    </div>
+    <canvas id="canvas"></canvas>
+    <select id="fontSelect">
+        <option value="Arial">Arial</option>
+        <option value="Times New Roman">Times New Roman</option>
+        <option value="Verdana">Verdana</option>
+    </select>
+    <script>
+        // Fabric.jsを使用してキャンバスを取得
+        var canvas = new fabric.Canvas('canvas');
+
+        // Canvasを最大サイズにする関数
+        function resizeCanvas() {
+            var canvasElement = document.getElementById('canvas');
+            canvasElement.width = window.innerWidth;
+            canvasElement.height = window.innerHeight;
+            canvas.setDimensions({ width: window.innerWidth, height: window.innerHeight });
+        }
+
+        // 初期化時とウィンドウサイズ変更時にCanvasのサイズを更新
+        window.addEventListener('load', resizeCanvas, false);
+        window.addEventListener('resize', resizeCanvas, false);
+
+        var isDragging = false;
+        var isEditting = false;
+
+// マウスの座標を表示するHTML要素を取得
+        var mousePositionDiv = document.getElementById('mousePosition');
+
+        // マウス移動イベントを監視して座標を表示
+        /*canvas.on('mouse:move', function(event) {
+            var pointer = canvas.getPointer(event.e);
+            var posX = pointer.x;
+            var posY = pointer.y;
+            mousePositionDiv.textContent = 'Left: ' + posX + ', Top: ' + posY;
+        });*/
+
+
+        // ダブルクリックしたときの処理
+        canvas.on('mouse:dblclick', function(event) {
+            if (isDragging) {
+                return; // ドラッグ中は処理しない
+            }
+
+            var target = event.target;
+            if (target && target.type === 'textbox') {
+                // テキストボックスがダブルクリックされた場合は編集モードにする
+                target.enterEditing();
+                target.selectAll();
+                canvas.setActiveObject(target); // テキストボックスをアクティブにする
+                isEditting = true;
+                console.log("change: true");
+                return;
+            }
+
+
+            var pointer = canvas.getPointer(event.e);
+
+    var textbox = new fabric.Textbox('text...', {
+        left: pointer.x,
+        top: pointer.y,
+        width: 150,
+        fontSize: 16,
+        editable: true
+    });
+
+            // ダブルクリックした位置にテキストボックスを配置
+            /*var textbox = new fabric.Textbox('text...', {
+                left: event.pointer.x,
+                top: event.pointer.y,
+                width: 150,
+                fontSize: 16,
+                editable: true
+            });*/
+            canvas.add(textbox);
+            canvas.setActiveObject(textbox);
+            textbox.enterEditing();
+            isEditting = true;
+            console.log("change: true");
+        });
+
+        // マウスが動いたときの処理
+        canvas.on('mouse:move', function(event) {
+            isDragging = true;
+        });
+
+        // マウスが静止したときの処理
+        canvas.on('mouse:up', function(event) {
+            isDragging = false;
+        });
+
+        // フォーカスが外れたときの処理
+        canvas.on('text:changed', function(event) {
+            var target = event.target;
+            if (target && target.type === 'textbox' && !canvas.getActiveObject()) {
+                // テキストボックスからフォーカスが外れた場合は編集を終了
+                target.exitEditing();
+                isEditting = false;
+                console.log("change: false");
+            }
+        });
+
+
+        // キャンバス上をクリックしたときの処理
+        canvas.on('mouse:down', function(event) {
+            isEditting = false;
+            console.log("change: false");
+            if(isDragging) {
+                return;
+            }
+            var target = event.target;
+            if (target && target.type === 'textbox') {
+                // テキストボックス以外の場所をクリックした場合は編集を終了
+                canvas.discardActiveObject();
+                target.selectAll();
+                return;
+            } else {
+                // テキストボックス以外の場所をクリックした場合は選択状態にする
+                canvas.discardActiveObject().renderAll();
+            }
+        });
+
+
+
+        // テキストボックスにフォーカスが入ったときの処理
+        canvas.on('text:editing:entered', function(event) {
+            var target = event.target;
+            if (target && target.type === 'textbox' && target.text === 'text...') {
+                // テキストボックスに初期テキストが入っている場合は削除する
+                target.selectAll();
+            }
+            console.log("editing:entered");
+        });
+
+
+        // キーボードイベントをキャッチしてDeleteキーが押されたらテキストを削除する
+        document.addEventListener('keydown', function(event) {
+            if ((event.ctrlKey || event.metaKey) && (event.key === 'c' || event.key === 'C')) {
+                // コピー (Ctrl+C or Cmd+C)
+                var activeObjects = canvas.getActiveObjects();
+                if (activeObjects.length > 0) {
+                    var clipboard = [];
+                    activeObjects.forEach(function(object) {
+                        if (object.type === 'textbox') {
+                            clipboard.push(object.toObject(['id', 'type', 'left', 'top', 'width', 'height', 'fill', 'stroke', 'strokeWidth', 'text', 'fontSize', 'fontFamily']));
+                        }
+                    });
+                    localStorage.setItem('clipboard', JSON.stringify(clipboard));
+                }
+            } else if ((event.ctrlKey || event.metaKey) && (event.key === 'v' || event.key === 'V')) {
+                // ペースト (Ctrl+V or Cmd+V)
+                if(isEditting == true) {
+                    return;
+                }
+                var clipboardData = localStorage.getItem('clipboard');
+                if (clipboardData) {
+                    var objects = JSON.parse(clipboardData);
+                    objects.forEach(function(obj) {
+                        if (obj.type === 'textbox') {
+                            fabric.util.enlivenObjects([obj], function(enlivenedObjects) {
+                                enlivenedObjects.forEach(function(enlivenedObject) {
+                                    enlivenedObject.set({
+                                        left: enlivenedObject.left + 10, // ペースト位置をずらす
+                                        top: enlivenedObject.top + 10 // ペースト位置をずらす
+                                    });
+                                    canvas.add(enlivenedObject);
+                                });
+                            });
+                        } else if (obj.type === 'image') {
+                            fabric.Image.fromURL(obj.src, function(image) {
+                                image.set({
+                                    left: image.left + 10, // ペースト位置をずらす
+                                    top: image.top + 10 // ペースト位置をずらす
+                                });
+                                canvas.add(image);
+                            });
+                        } else if (obj.type === 'dataURL') {
+                            fabric.Image.fromURL(obj.src, function(image) {
+                                image.set({
+                                    left: image.left + 10, // ペースト位置をずらす
+                                    top: image.top + 10 // ペースト位置をずらす
+                                });
+                                canvas.add(image);
+                            });
+                        }
+                    });
+                }
+            } else if (event.key === 'Delete' || event.key === 'Backspace') {
+                console.log(isEditting);
+                if (isEditting == false) {
+                  var activeObjects = canvas.getActiveObjects();
+                  activeObjects.forEach(function(object) {
+                      if (object.type === 'textbox') {
+                          canvas.remove(object);
+                      }
+                  });
+                }
+            }
+
+        });
+
+function clearCanvas() {
+    canvas.clear();
+}
+
+// ファイルを上書き保存する関数
+/*
+function saveToFile() {
+    var objects = canvas.getObjects().map(function(obj) {
+        if (obj.type === 'textbox') {
+            return {
+                type: obj.type,
+                left: obj.left,
+                top: obj.top,
+                width: obj.width,
+                height: obj.height,
+                text: obj.text,
+                fontSize: obj.fontSize,
+                fill: obj.fill
+            };
+        }
+    });
+    var data = JSON.stringify(objects);
+    var blob = new Blob([data], { type: 'application/json' });
+
+    var fileName = 'ScenarioBay_Canvas.sce';
+    if (confirm('保存しますか？')) {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+    }
+}*/
+
+// ファイルを保存する関数
+function saveToFile() {
+    var fileName = prompt("保存するファイル名を入力してください", "canvas.sce");
+    if (fileName) {
+        var objects = canvas.getObjects().map(function(obj) {
+            if (obj.type === 'textbox') {
+                return {
+                    type: obj.type,
+                    left: obj.left,
+                    top: obj.top,
+                    width: obj.width,
+                    height: obj.height,
+                    text: obj.text,
+                    fontSize: obj.fontSize,
+                    fill: obj.fill
+                };
+            }
+        });
+        var data = JSON.stringify(objects);
+        var blob = new Blob([data], { type: 'application/json' });
+
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+}
+
+
+
+        // .sceファイルを読み込む関数
+        function loadFromFile(event) {
+            var file = event.target.files[0];
+            if (!file) return;
+
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var data = JSON.parse(e.target.result);
+                canvas.clear();
+                data.forEach(function(obj) {
+                    if (obj.type === 'textbox') {
+                        var textbox = new fabric.Textbox(obj.text, {
+                            left: obj.left,
+                            top: obj.top,
+                            width: obj.width,
+                            height: obj.height,
+                            fontSize: obj.fontSize,
+                            fill: obj.fill
+                        });
+                        canvas.add(textbox);
+                    }
+                });
+            };
+            reader.readAsText(file);
+        }
+
+canvas.on('mouse:wheel', function(opt) {
+  var delta = opt.e.deltaY;
+  var zoom = canvas.getZoom();
+  zoom *= 0.999 ** delta;
+  if (zoom > 20) zoom = 20;
+  if (zoom < 0.01) zoom = 0.01;
+  canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+  opt.e.preventDefault();
+  opt.e.stopPropagation();
+});
+
+canvas.on('mouse:down', function(opt) {
+  var evt = opt.e;
+  if (evt.altKey === true) {
+    this.isDragging = true;
+    this.selection = false;
+    this.lastPosX = evt.clientX;
+    this.lastPosY = evt.clientY;
+  }
+});
+
+canvas.on('mouse:move', function(opt) {
+  if (this.isDragging) {
+    var e = opt.e;
+    var vpt = this.viewportTransform;
+    vpt[4] += e.clientX - this.lastPosX;
+    vpt[5] += e.clientY - this.lastPosY;
+    this.requestRenderAll();
+    this.lastPosX = e.clientX;
+    this.lastPosY = e.clientY;
+  }
+});
+
+canvas.on('mouse:up', function(opt) {
+  // on mouse up we want to recalculate new interaction
+  // for all objects, so we call setViewportTransform
+  this.setViewportTransform(this.viewportTransform);
+  this.isDragging = false;
+  this.selection = true;
+});
+
+
+// ドロップ領域の要素を取得
+        var dropArea = document.getElementById('canvas');
+
+        // ドラッグオーバーイベントの処理を定義
+        dropArea.addEventListener('dragover', function(event) {
+            event.preventDefault(); // デフォルトのドラッグオーバー動作をキャンセル
+        });
+
+        // ドロップイベントの処理を定義
+        dropArea.addEventListener('drop', function(event) {
+            event.preventDefault(); // デフォルトのドロップ動作をキャンセル
+
+            // ドロップされたファイルを取得
+            var file = event.dataTransfer.files[0];
+
+            // ファイルが画像ファイルであれば処理を続行
+            if (file && file.type.startsWith('image')) {
+                // 画像ファイルを読み込んでCanvasに貼り付ける
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    fabric.Image.fromURL(e.target.result, function(img) {
+                        img.set({
+                            left: event.clientX - dropArea.getBoundingClientRect().left, // ドロップされた位置に合わせてCanvas上での位置を設定
+                            top: event.clientY - dropArea.getBoundingClientRect().top,
+                            scaleX: 0.5, // 画像のスケールを設定（任意の値）
+                            scaleY: 0.5
+                        });
+                        canvas.add(img);
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 操作履歴を管理する配列
+        var history = [];
+
+        // Ctrl + Z が押されたときの処理
+        window.addEventListener('keydown', function(event) {
+            if (event.ctrlKey && event.key === 'z') {
+                event.preventDefault(); // デフォルトの動作をキャンセル
+
+                // 直前の操作を取り消す
+                if (history.length > 0) {
+                    var lastAction = history.pop();
+                    if (lastAction.undo) {
+                        lastAction.undo(); // 操作を取り消すための関数を実行
+                    }
+                    canvas.renderAll();
+                }
+            }
+        });
+
+        // フォント変更のUI要素を取得
+        var fontSelect = document.getElementById('fontSelect');
+
+        // テキストボックスが選択されたときの処理を定義
+        canvas.on('selection:created', function(event) {
+            var target = event.target;
+            if (target && target.type === 'textbox') {
+                // テキストボックスが選択されたときにフォント選択UIを表示
+                fontSelect.value = target.fontFamily;
+                fontSelect.style.display = 'block';
+            }
+        });
+
+        // テキストボックスのフォントを変更する関数
+        function changeFont() {
+            var font = fontSelect.value;
+            var activeObject = canvas.getActiveObject();
+            if (activeObject && activeObject.type === 'textbox') {
+                activeObject.set('fontFamily', font);
+                canvas.renderAll();
+            }
+        }
+
+        // フォント選択UIの変更時にフォントを変更する
+        fontSelect.addEventListener('change', function() {
+            changeFont();
+        });
+
+        // キャンバス上でクリックしたときにフォント選択UIを非表示にする
+        canvas.on('selection:cleared', function(event) {
+            fontSelect.style.display = 'none';
+        });
+    </script>
+</body>
+</html>
+
+
+
